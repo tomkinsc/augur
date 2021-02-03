@@ -10,7 +10,7 @@ import numpy as np
 import sys
 import datetime
 import treetime.utils
-from .utils import read_metadata, get_numerical_dates, run_shell_command, shquote
+from .utils import read_metadata, get_numerical_dates, run_shell_command, shquote, is_date_ambiguous
 
 comment_char = '#'
 
@@ -100,14 +100,20 @@ def register_arguments(parser):
     subsample_group.add_argument('--sequences-per-group', type=int, help="subsample to no more than this number of sequences per category")
     subsample_group.add_argument('--subsample-max-sequences', type=int, help="subsample to no more than this number of sequences")
     parser.add_argument('--group-by', nargs='+', help="categories with respect to subsample; two virtual fields, \"month\" and \"year\", are supported if they don't already exist as real fields but a \"date\" field does exist")
+    probabilistic_sampling_group = parser.add_mutually_exclusive_group()
+    probabilistic_sampling_group.add_argument('--probabilistic-sampling', action='store_true', help="Enable probabilistic sampling during subsampling. This is useful when there are more groups than requested sequences. This option only applies when `--subsample-max-sequences` is provided.")
+    probabilistic_sampling_group.add_argument('--no-probabilistic-sampling', action='store_false', dest='probabilistic_sampling')
     parser.add_argument('--subsample-seed', help="random number generator seed to allow reproducible sub-sampling (with same input data). Can be number or string.")
     parser.add_argument('--exclude-where', nargs='+',
                                 help="Exclude samples matching these conditions. Ex: \"host=rat\" or \"host!=rat\". Multiple values are processed as OR (matching any of those specified will be excluded), not AND")
     parser.add_argument('--include-where', nargs='+',
                                 help="Include samples with these values. ex: host=rat. Multiple values are processed as OR (having any of those specified will be included), not AND. This rule is applied last and ensures any sequences matching these rules will be included.")
+    parser.add_argument('--exclude-ambiguous-dates-by', choices=['any', 'day', 'month', 'year'],
+                                help='Exclude ambiguous dates by day (e.g., 2020-09-XX), month (e.g., 2020-XX-XX), year (e.g., 200X-10-01), or any date fields. An ambiguous year makes the corresponding month and day ambiguous, too, even if those fields have unambiguous values (e.g., "201X-10-01"). Similarly, an ambiguous month makes the corresponding day ambiguous (e.g., "2010-XX-01").')
     parser.add_argument('--query', help="Filter samples by attribute. Uses Pandas Dataframe querying, see https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#indexing-query for syntax.")
     parser.add_argument('--output', '-o', help="output file", required=True)
 
+    parser.set_defaults(probabilistic_sampling=True)
 
 def run(args):
     '''
@@ -139,7 +145,7 @@ def run(args):
     #if Fasta, read in file to get sequence names and sequences
     else:
         try:
-            seqs = SeqIO.to_dict(SeqIO.parse(args.sequences, 'fasta'))
+            seqs = SeqIO.index(args.sequences, 'fasta')
         except ValueError as error:
             print("ERROR: Problem reading in {}:".format(args.sequences))
             print(error)
@@ -231,6 +237,17 @@ def run(args):
             num_excluded_by_length = len(seq_keep) - len(seq_keep_by_length)
             seq_keep = seq_keep_by_length
 
+    # filter by ambiguous dates
+    num_excluded_by_ambiguous_date = 0
+    if args.exclude_ambiguous_dates_by and 'date' in meta_columns:
+        seq_keep_by_date = []
+        for seq_name in seq_keep:
+            if not is_date_ambiguous(meta_dict[seq_name]['date'], args.exclude_ambiguous_dates_by):
+                seq_keep_by_date.append(seq_name)
+
+        num_excluded_by_ambiguous_date = len(seq_keep) - len(seq_keep_by_date)
+        seq_keep = seq_keep_by_date
+
     # filter by date
     num_excluded_by_date = 0
     if (args.min_date or args.max_date) and 'date' in meta_columns:
@@ -316,25 +333,46 @@ def run(args):
                 # this is only possible if we have imposed a maximum number of samples
                 # to produce.  we need binary search until we have the correct spg.
                 try:
-                    spg = _calculate_sequences_per_group(
-                        args.subsample_max_sequences,
-                        [len(sequences_in_group)
-                         for sequences_in_group in seq_names_by_group.values()],
-                    )
+                    length_of_sequences_per_group = [
+                        len(sequences_in_group)
+                        for sequences_in_group in seq_names_by_group.values()
+                    ]
+
+                    if args.probabilistic_sampling:
+                        spg = _calculate_fractional_sequences_per_group(
+                            args.subsample_max_sequences,
+                            length_of_sequences_per_group
+                        )
+                    else:
+                        spg = _calculate_sequences_per_group(
+                            args.subsample_max_sequences,
+                            length_of_sequences_per_group
+                        )
                 except TooManyGroupsError as ex:
                     print(f"ERROR: {ex}", file=sys.stderr)
                     sys.exit(1)
                 print("sampling at {} per group.".format(spg))
 
+            if args.probabilistic_sampling:
+                random_generator = np.random.default_rng()
+
             # subsample each groups, either by taking the spg highest priority strains or
             # sampling at random from the sequences in the group
             seq_subsample = []
             for group, sequences_in_group in seq_names_by_group.items():
-                if args.priority: #sort descending by priority
-                    seq_subsample.extend(sorted(sequences_in_group, key=lambda x:priorities[x], reverse=True)[:spg])
+                if args.probabilistic_sampling:
+                    tmp_spg = random_generator.poisson(spg)
                 else:
-                    seq_subsample.extend(sequences_in_group if len(sequences_in_group)<=spg
-                                         else random.sample(sequences_in_group, spg))
+                    tmp_spg = spg
+
+                if tmp_spg == 0:
+                    continue
+
+                if args.priority: #sort descending by priority
+                    seq_subsample.extend(sorted(sequences_in_group, key=lambda x:priorities[x], reverse=True)[:tmp_spg])
+                else:
+                    seq_subsample.extend(sequences_in_group if len(sequences_in_group)<=tmp_spg
+                                         else random.sample(sequences_in_group, tmp_spg))
 
             num_excluded_subsamp = len(seq_keep) - len(seq_subsample)
             seq_keep = seq_subsample
@@ -394,11 +432,24 @@ def run(args):
         write_vcf(args.sequences, args.output, dropped_samps)
 
     else:
-        seq_to_keep = [seq for id,seq in seqs.items() if id in seq_keep]
-        if len(seq_to_keep) == 0:
+        # It is possible to have ids in the list of sequences to keep that do
+        # not exist in the original input sequences. Find the intersection of
+        # these two lists of ids to determine if all samples were dropped or
+        # not. This final list of ids is in the same order as the input
+        # sequences such that output sequences are always in the same order for
+        # a given set of filters.
+        seq_to_write = [seq_id for seq_id in seqs if seq_id in seq_keep]
+
+        if len(seq_to_write) == 0:
             print("ERROR: All samples have been dropped! Check filter rules and metadata file format.")
             return 1
-        SeqIO.write(seq_to_keep, args.output, 'fasta')
+
+        # Write out sequences that passed all filters using an iterator to
+        # ensure that sequences are streamed to disk without being read into
+        # memory first.
+        seq_to_keep = (seqs[seq_id] for seq_id in seq_to_write)
+        sequences_written = SeqIO.write(seq_to_keep, args.output, 'fasta')
+        seqs.close()
 
     print("\n%i sequences were dropped during filtering" % (len(all_seq) - len(seq_keep),))
     if args.exclude:
@@ -410,6 +461,8 @@ def run(args):
         print("\t%i of these were filtered out by the query:\n\t\t\"%s\"" % (num_excluded_by_query, args.query))
     if args.min_length:
         print("\t%i of these were dropped because they were shorter than minimum length of %sbp" % (num_excluded_by_length, args.min_length))
+    if args.exclude_ambiguous_dates_by and num_excluded_by_ambiguous_date:
+        print("\t%i of these were dropped because of their ambiguous date in %s" % (num_excluded_by_ambiguous_date, args.exclude_ambiguous_dates_by))
     if (args.min_date or args.max_date) and 'date' in meta_columns:
         print("\t%i of these were dropped because of their date (or lack of date)" % (num_excluded_by_date))
     if args.non_nucleotide:
@@ -457,8 +510,8 @@ class TooManyGroupsError(ValueError):
 
 
 def _calculate_total_sequences(
-        hypothetical_spg: int, sequence_lengths: Collection[int],
-) -> int:
+        hypothetical_spg: float, sequence_lengths: Collection[int],
+) -> float:
     # calculate how many sequences we'd keep given a hypothetical spg.
     return sum(
         min(hypothetical_spg, sequence_length)
@@ -468,7 +521,7 @@ def _calculate_total_sequences(
 
 def _calculate_sequences_per_group(
         target_max_value: int,
-        sequence_lengths: Collection[int],
+        sequence_lengths: Collection[int]
 ) -> int:
     """This is partially inspired by
     https://github.com/python/cpython/blob/3.8/Lib/bisect.py
@@ -509,13 +562,62 @@ def _calculate_sequences_per_group(
 
     lo = 1
     hi = target_max_value
+
     while hi - lo > 2:
-        mid = (lo + hi) // 2
+        mid = (hi + lo) // 2
         if _calculate_total_sequences(mid, sequence_lengths) <= target_max_value:
             lo = mid
         else:
             hi = mid
+
     if _calculate_total_sequences(hi, sequence_lengths) <= target_max_value:
-        return hi
+        return int(hi)
     else:
-        return lo
+        return int(lo)
+
+
+def _calculate_fractional_sequences_per_group(
+        target_max_value: int,
+        sequence_lengths: Collection[int]
+) -> float:
+    """Returns the fractional sequences per group for the given list of group
+    sequences such that the total doesn't exceed the requested number of
+    samples.
+
+    Parameters
+    ----------
+    target_max_value : int
+        the total number of sequences allowed across all groups
+    sequence_lengths : Collection[int]
+        the number of sequences in each group
+
+    Returns
+    -------
+    float
+        fractional maximum number of sequences allowed per group to meet the
+        required maximum total sequences allowed
+
+    >>> np.around(_calculate_fractional_sequences_per_group(4, [4, 2]), 4)
+    1.9375
+    >>> np.around(_calculate_fractional_sequences_per_group(2, [4, 2]), 4)
+    0.9688
+
+    Unlike the integer-based version of this function, the fractional version
+    can accept a maximum number of sequences that exceeds the number of groups.
+    In this case, the function returns a fraction that can be used downstream,
+    for example with Poisson sampling.
+
+    >>> np.around(_calculate_fractional_sequences_per_group(1, [4, 2]), 4)
+    0.4844
+    """
+    lo = 1e-5
+    hi = target_max_value
+
+    while (hi / lo) > 1.1:
+        mid = (lo + hi) / 2
+        if _calculate_total_sequences(mid, sequence_lengths) <= target_max_value:
+            lo = mid
+        else:
+            hi = mid
+
+    return (lo + hi) / 2

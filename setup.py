@@ -49,12 +49,11 @@ setuptools.setup(
     python_requires = '>={}'.format('.'.join(str(n) for n in min_version)),
     install_requires = [
         "bcbio-gff >=0.6.0, ==0.6.*",
-        "biopython >=1.67, ==1.*",
+        "biopython >=1.67, <=1.76",
         "jsonschema >=3.0.0, ==3.*",
         "packaging >=19.2",
         "pandas >=1.0.0, ==1.*",
-        "phylo-treetime >=0.7.4, ==0.7.*",
-        "snakemake >=5.4.0, <5.11"
+        "phylo-treetime ==0.8.*"
     ],
     extras_require = {
         'full': [
@@ -72,6 +71,7 @@ setuptools.setup(
             "pytest-cov >=2.8.1, ==2.8.*",
             "pytest-mock >= 2.0.0, ==2.0.*",
             "recommonmark >=0.5.0, ==0.*",
+            "snakemake >=5.4.0, <5.27",
             "Sphinx >=2.0.1, ==2.*",
             "sphinx-argparse >=0.2.5, ==0.*",
             "sphinx-markdown-tables >= 0.0.9",

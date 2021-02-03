@@ -1,11 +1,42 @@
 # Installation
 
+* [Using conda](#using-conda)
 * [Using pip from PyPi](#using-pip-from-pypi)
-* [Using Conda](#using-conda)
 * [Install from source](#install-from-source)
 * [Testing if it worked](#testing-if-it-worked)
 
 ---
+
+## Using conda
+
+[Install Miniconda with Python 3](https://docs.conda.io/en/latest/miniconda.html).
+If you already have Miniconda installed with Python 2, download the latest Python 3 version and [follow conda's installation instructions](https://conda.io/projects/conda/en/latest/user-guide/install/index.html).
+If you already have an older Miniconda version installed with Python 3, you may need to update your installation prior to installing Nextstrain's tools with:
+
+```sh
+conda activate base
+conda update conda
+```
+
+Create a conda environment to install augur into and activate that environment.
+
+```bash
+conda create -n nextstrain
+conda activate nextstrain
+```
+
+Install augur and its dependencies into your environment.
+
+```bash
+conda install -c conda-forge -c bioconda augur
+```
+
+For a much faster installation process, use [mamba](https://github.com/TheSnakePit/mamba) as a drop-in replacement for conda.
+
+```bash
+conda install -c conda-forge mamba
+mamba install -c conda-forge -c bioconda augur
+```
 
 ## Using pip from PyPi
 
@@ -18,6 +49,8 @@ python3 -m pip install nextstrain-augur
 
 Augur uses some common external bioinformatics programs which you'll need to install to have a fully functioning toolkit:
 
+* Nextstrain workflows and some tutorials require [Snakemake](https://snakemake.readthedocs.io)
+
 * `augur align` requires [mafft](https://mafft.cbrc.jp/alignment/software/)
 
 * `augur tree` requires at least one of:
@@ -27,7 +60,7 @@ Augur uses some common external bioinformatics programs which you'll need to ins
 
 * Bacterial data (or any VCF usage) requires [vcftools](https://vcftools.github.io/)
 
-On macOS, you can install these external programs using [Homebrew](https://brew.sh/) with:
+On macOS, you can install most of these external programs using [Homebrew](https://brew.sh/) with:
 
     brew tap brewsci/bio
     brew install mafft iqtree raxml fasttree vcftools
@@ -37,18 +70,7 @@ On Debian/Ubuntu, you can install them via:
     sudo apt install mafft iqtree raxml fasttree vcftools
 
 Other Linux distributions will likely have the same packages available, although the names may differ slightly.
-
-## Using Conda
-
-Alternatively, augur itself and all of its dependencies can be installed into a [Conda](https://conda.io/miniconda.html) environment:
-
-    conda env create -f environment.yml
-
-> _By default this environment is named "augur" but you can change that by providing a name to the above command with `-n <your-env-name>`_
-
-When that finishes, the enviroment needs to be activated whenever you want to use augur:
-
-    conda activate augur
+Follow [Snakemake's installation instructions](https://snakemake.readthedocs.io/en/stable/getting_started/installation.html) for your operating system.
 
 ## Install from source
 

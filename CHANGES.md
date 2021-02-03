@@ -2,14 +2,145 @@
 
 ## __NEXT__
 
+
+## 11.0.0 (22 January 2021)
+
 ### Major Changes
 
+* filter: Use probabilistic sampling by default when requesting a maximum number of sequences to subsample with `--subsample-max-sequences`. Adds `--no-probabilistic-sampling` flag to disable this default behavior and prevent users from requesting fewer maximum sequences than there are subsampling groups. [#659][]
+
+[#659]: https://github.com/nextstrain/augur/pull/659
+
+## 10.3.0 (14 January 2021)
+
+### Bug Fixes
+
+* scripts: Fix typo in `verify_meta_json.py` [#656][] (@felixonmars)
+* CI: Use the expected Python version in conda environments [#658][]
+* CI: Minimize codecov feedback [#661][]
+
+### Features
+
+* frequencies: Add `--pivot-interval-units` argument with support for weekly pivots [#660][]
+* frequencies: Add support for ISO dates for `--min-date` and `--max-date` arguments [#660][]
+
+[#656]: https://github.com/nextstrain/augur/pull/656
+[#658]: https://github.com/nextstrain/augur/pull/658
+[#660]: https://github.com/nextstrain/augur/pull/660
+[#661]: https://github.com/nextstrain/augur/pull/661
+
+## 10.2.0 (1 January 2021)
+
+### Features
+
+* filter: Add `--probablistic-sampling` flag to allow subsampling with `--subsample-max-sequences` when the number of groups exceeds the requested number of samples [#629][]
+* scripts: Add script to identify emerging clades from existing Nextstrain build JSONs [#653][]
+* docs: Add instructions to update conda installations prior to installing Augur [#655][]
+
+[#629]: https://github.com/nextstrain/augur/pull/629
+[#653]: https://github.com/nextstrain/augur/pull/653
+[#655]: https://github.com/nextstrain/augur/pull/655
+
+## 10.1.1 (16 November 2020)
+
+### Bug Fixes
+
+* dependencies: Require the most recent minor versions of TreeTime (0.8.X) to fix numpy matrix errors [#633][]
+
+[#633]: https://github.com/nextstrain/augur/pull/633
+
+## 10.1.0 (13 November 2020)
+
+### Features
+
+* docs: Migrate non-reference documentation to docs.nextstrain.org [#620][]
+* filter: Add `--exclude-ambiguous-dates-by` flag to enable exclusion of samples with ambiguous dates [#623][] and [#631][]
+
+[#620]: https://github.com/nextstrain/augur/pull/620
+[#623]: https://github.com/nextstrain/augur/pull/623
+[#631]: https://github.com/nextstrain/augur/pull/631
+
+## 10.0.4 (6 November 2020)
+
+### Bug Fixes
+
+* tree: Use a more generic approach to escape special characters from alignment sequence names prior to running IQ-TREE [#625][]
+* filter: Reduce memory usage by not reading sequences into memory [#627][]
+
+[#625]: https://github.com/nextstrain/augur/pull/625
+[#627]: https://github.com/nextstrain/augur/pull/627
+
+## 10.0.3 (23 October 2020)
+
+### Bug Fixes
+
+* refine: Report divergence by number of mutations as an integer instead of a floating point value [#618][]
+* validate: Allow internal nodes with a single child and do not allow duplicate node names [#621][]
+
+[#618]: https://github.com/nextstrain/augur/pull/618
+[#621]: https://github.com/nextstrain/augur/pull/621
+
+## 10.0.2 (8 September 2020)
+
+### Bug Fixes
+
+* align: Remove references to BioPython's deprecated `Alphabet` attributes [#615][]
+* Pin BioPython dependency to a max supported version to prevent breaking changes to augur in the future [#615][]
+
+[#615]: https://github.com/nextstrain/augur/pull/615
+
+## 10.0.1 (8 September 2020)
+
+### Bug Fixes
+
+* ancestral: Clarify default values for inference of ambiguous bases [#613][]
+
+[#613]: https://github.com/nextstrain/augur/pull/613
+
+## 10.0.0 (17 August 2020)
+
+### Major Changes
+
+* Remove Snakemake as a dependency of the augur Python package [#557][]
+  * Updated documentation to reflect external Snakemake dependency [#600][] and Snakemake's required `--cores` argument [#599][]
+* utils: `read_colors` refactor [#588][]
+  * raises an exception when the requested color file is missing instead of printing a warning to stdout
+  * splits out logic to parse colors file into separate classes (`util_support/color_parser.py` and `util_support/color_parser_line.py`) with unit tests
 * utils: `read_metadata` interface improvements
   * raises exceptions when 1) input file is missing or unreadable or 2) required columns (`strain` or `name`) are missing instead of failing silently [#584][]
   * automatically detects delimiter in metadata file instead of assuming delimiter based on filename extension [#587][]
+* utils: `read_node_data` interface improvements [#595][], [#605][]
+  * exits with a nonzero code when node data node names don't match tree nodes and when the input tree cannot be loaded
+  * refactors logic to read node data into separate classes with unit tests
 
+### Bug Fixes
+
+* ancestral: Fix docstring for `collect_mutations_and_sequences` [4c474a9][]
+* parse: Fix date parsing bug caused by a change in the API for `parse_time_string` in pandas 1.1.0 [#601][]
+* refine: Enable divergence unit scaling without timetree [e9b3eec][]
+* tree: Use IQ-TREE's `-nt AUTO` mode when users request more threads than there are input sequences, avoiding an IQ-TREE error [#598][]
+
+### Features
+
+* docs: Document support for installation from Bioconda [#604][]
+* filter: Add `--subsample-max-sequences` argument to limit the maximum number of sequences to be included in subsampled output [#593][]
+* mask: Add `--mask-invalid` flag to mask invalid nucleotides from FASTA files [#592][]
+
+[#557]: https://github.com/nextstrain/augur/pull/557
 [#584]: https://github.com/nextstrain/augur/pull/584
 [#587]: https://github.com/nextstrain/augur/pull/587
+[#588]: https://github.com/nextstrain/augur/pull/588
+[#592]: https://github.com/nextstrain/augur/pull/592
+[#593]: https://github.com/nextstrain/augur/pull/593
+[#595]: https://github.com/nextstrain/augur/pull/595
+[#598]: https://github.com/nextstrain/augur/pull/598
+[#599]: https://github.com/nextstrain/augur/pull/599
+[#600]: https://github.com/nextstrain/augur/pull/600
+[#601]: https://github.com/nextstrain/augur/pull/601
+[#604]: https://github.com/nextstrain/augur/pull/604
+[#605]: https://github.com/nextstrain/augur/pull/605
+[e9b3eec]: https://github.com/nextstrain/augur/commit/e9b3eec670b9603874e195cc1ccd4f3c1aeef5dd
+[4c474a9]: https://github.com/nextstrain/augur/commit/4c474a96232e9cc333e3fc4c0971336a090b703c
 
 ## 9.0.0 (29 June 2020)
 
